@@ -1,0 +1,25 @@
+const asyncHandler = (requestHandler) => {
+  (req, res, next) => {
+    Promise.resolve(requestHandler(req, res, next)).catch((err) => next(err));
+  };
+};
+
+export { asyncHandler };
+
+// const asyncHandler2 = (fn)  => { () => {} }
+// this and the function down below are the same
+
+// const asyncHandler = (fn) => async (req, res, next) => {
+//     try {
+
+//     } catch (error) {
+//         res.status(error.code || 500).json({
+//             success: false,
+//             message: error.message
+//         })
+//     }
+// }
+
+// two types more to Write
+// const asyncHandler = () => {}
+// const asyncHnadler = (func) => async () => {}
