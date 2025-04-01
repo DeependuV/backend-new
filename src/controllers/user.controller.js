@@ -29,23 +29,28 @@ const registerUser = asyncHandler(async (req, res) => {
         throw new ApiError(400, "User with email or username already exists")
     }
 
-    console.log(req.files, "Consoling for good luck")
+    // console.log(req.files, "Consoling for good luck")
 
     // check for images, check for avatar
     const avatarLocalPath = req.files?.avatar[0]?.path;
-    const coverImageLocalPath = req.files?.coverImage[0]?.path;
+    // const coverImageLocalPath = req.files?.coverImage[0]?.path;
+
+    let coverImageLocalPath;
+    if(req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length > 0) {
+        coverImageLocalPath = req.files.coverImage[0].path;
+    }
 
     if(!avatarLocalPath) {  
         throw new ApiError(400, "Avatar File is required");
     }
 
-    console.log(avatarLocalPath, "Consolinng for good luck 2")
+    // console.log(avatarLocalPath, "Consolinng for good luck 2")
 
     // upload them to cloudinary, avatar
     const avatar = await uploadOnCloudinary(avatarLocalPath);
     const coverImage = await uploadOnCloudinary(coverImageLocalPath);
 
-    console.log("console here last", avatar);
+    // console.log("console here last", avatar);
 
     if(!avatar) {
         throw new ApiError(400, "Avatar file is required");
@@ -58,7 +63,7 @@ const registerUser = asyncHandler(async (req, res) => {
         coverImage: coverImage?.url || "",
         email,
         password,
-        username: username.toLowercase()
+        username: username
     })
 
     // remove password and refresh token field from response
