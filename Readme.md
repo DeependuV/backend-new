@@ -25,3 +25,4 @@ arrow function doesn't take reference of this and we will be needing reference o
 # sessions and cookies both are being used in this project for security purpose
 Access token is not stored in dtabase whereas refresh token is stored
 
+# multer increases thing in request object and gives us access to req.files
