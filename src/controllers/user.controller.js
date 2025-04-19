@@ -3,7 +3,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { User } from "../models/user.model.js"
 import {uploadOnCloudinary} from "../utils/cloudinary.js"
 import { ApiResponse } from "../utils/ApiResponse.js";
-import { trusted } from "mongoose";
+import mongoose, { trusted } from "mongoose";
 import jwt from "jsonwebtoken"
 
 const generateAccessAndRefreshTokens = async(userId) => {
@@ -249,7 +249,11 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
 const getCurrentUser = asyncHandler(async (req, res) => {
     return res
     .status(200)
-    .json(200, req.user, "current user fetched successfully")
+    .json(new ApiResponse(
+        200, 
+        req.user, 
+        "current user fetched successfully"
+    ))
 })
 
 const updateAccountDetails = asyncHandler(async (req, res) => {
@@ -283,6 +287,8 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
     }
 
     const avatar = await uploadOnCloudinary(avatarLocalPath);
+
+    // write utility function for removing old uploaded image -> task
 
     if(!avatar) {
         throw new ApiError(400), "Error while uploading on avatar"
@@ -332,6 +338,133 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200), user, "cover image updated successfully")
 })
 
+const getUserChannelProfile = asyncHandler(async (req, res) => {
+    const {username} = req.params
+
+    if(!username?.trim()) {
+        throw new ApiError(400, "username is missing")
+    }
+
+    // using aggregation pipeline instead of finding an objec based on the id and then aggregatinng it
+    const channel = await User.aggregate([
+        {
+             $match: {
+                username: username?.toLowerCase()
+             }
+        },
+        {
+            $lookup: {
+                from: "subscriptions",
+                localField: "_id",
+                foreignField: "channel",
+                as: "subscribers"
+            }
+        },
+        {
+            $lookup: {
+                from: "subscriptions",
+                localField: "_id",
+                foreignField: "subscriber",
+                as: "subscriberdTo"
+            }
+        },
+        {
+            $addFields: {
+                subscribersCount: {
+                    $size: "subscribers"
+                },
+                channelsSubscribedToCount: {
+                    $size: "$subscribedTo"
+                },
+                isSubscribed: {
+                    $cond: {
+                        if: {$in: [req.user?._id, "$subscribers.subscriber"]}, // in looks up into both array and object
+                        then: true,
+                        else: false
+                    }
+                }
+            }
+        },
+        {
+            $project: {
+                fullname: 1,
+                username: 1,
+                subscribersCount: 1,
+                channelsSubscribedToCount: 1,
+                isSubscribed: 1,
+                avatar: 1,
+                coverImage: 1,
+                email: 1,
+            }
+        }
+    ])
+
+    if(!channel?.length) {
+        throw new ApiError(404, "Channel does not exist")
+    }
+
+    return res
+    .status(200)
+    .json( 
+        new ApiResponse(200, channel[0], "user channel fetched successfully")
+    )
+})
+
+const getWatchHistory = asyncHandler(async (req, res) => {
+    const user = await User.aggregate([
+        {
+            $match: {
+                _id: new mongoose.Types.ObjectId(req.user._id) // writing this because req.user._id doesnt give us the mongoose id but rather gives us a string but in pipelines the feature of mongoose which changes the string to id doesnt work directly so we use this method
+            }
+        },
+        {
+            $lookup: {
+                from: 'videos',
+                localField: "watchHistory",
+                foreignField: "_id",
+                as: "watchHistory",
+                pipeline: [
+                    {
+                        $lookup: { // lookup gives us an array
+                            from: "users",
+                            localField: "owner",
+                            foreignField: "_id",
+                            as: "owner",
+                            pipeline: [
+                                {
+                                    $project: {
+                                        fullname: 1,
+                                        username: 1,
+                                        avatar: 1, 
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        // this is for frontend ease as this will return an array but when we use this pipeline this will give an object istead of an array
+                        $addFields: {
+                            owner: {
+                                $first: "$owner"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+
+        }
+
+    ])
+
+    return res
+    .status(200)
+    .json(new ApiResponse(200, user[0].watchHistory, "watch history fetched successfully"))
+})
+
+
+
 export { 
     registerUser,
     loginUser,
@@ -341,5 +474,7 @@ export {
     getCurrentUser,
     updateAccountDetails,
     updateUserAvatar,
-    updateUserCoverImage
+    updateUserCoverImage,
+    getUserChannelProfile,
+    getWatchHistory
  };
